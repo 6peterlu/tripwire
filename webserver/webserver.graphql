@@ -1,0 +1,131 @@
+type Book {
+  author: String
+  title: String
+}
+
+scalar DateTime
+
+type Event {
+  customerUserID: String!
+  eventID: String!
+  eventType: String!
+  stringifiedEventData: String!
+  timestamp: DateTime!
+}
+
+input GenericRuleActionInput {
+  ruleActionDefinition: JSONObject!
+  ruleActionType: RuleActionType!
+}
+
+enum GenericRuleArgumentEnum {
+  BOOLEAN
+  BOOLEAN_ARRAY
+  JSON_FIELD
+  NUMBER
+  NUMBER_ARRAY
+  NUMERIC_COMPARISON_OPERATOR
+  SIGNATURE
+  STRING
+  STRING_ARRAY
+}
+
+input GenericRuleInput {
+  ruleActions: [String!]!
+  ruleDefinition: JSONObject!
+  userSignatureDefinition: JSONObject!
+}
+
+type GenericRuleMetadata {
+  arguments: [GenericRuleArgumentEnum!]!
+  functionID: String!
+  name: String!
+  returns: GenericRuleArgumentEnum!
+}
+
+input GetRuleOptionsInput {
+  outputType: GenericRuleArgumentEnum!
+}
+
+scalar JSONObject
+
+type Metric {
+  metricID: String!
+  metricName: String!
+  metricType: MetricType!
+  stringifiedMetricDefinition: String!
+}
+
+input MetricInput {
+  metricName: String!
+  metricType: MetricType!
+  stringifiedMetricDefinition: String!
+}
+
+enum MetricType {
+  COUNT
+  UNIQUE_VALUES
+}
+
+type MetricValue {
+  value: Float!
+}
+
+type Mutation {
+  createGenericRule(rule: GenericRuleInput!): Void
+  createGenericRuleAction(ruleAction: GenericRuleActionInput!): Void
+  createMetric(metric: MetricInput!): Void
+  createRule(rule: RuleInput!): Void
+  deleteMetric(metricID: String!): Void
+}
+
+type Query {
+  getEvents(customerUserID: String): [Event!]!
+  getMetricValueHistogram(metricID: String!): [MetricValue!]!
+  getMetrics: [Metric!]!
+  getRuleActions: [RuleAction!]!
+  getRuleOptions(input: GetRuleOptionsInput!): [GenericRuleMetadata!]!
+  getRules: [Rule!]!
+}
+
+type Rule {
+  name: String!
+  ruleActions: [RuleActionPreview!]!
+  ruleID: String!
+  thresholds: [SingleMetricThreshold!]!
+}
+
+type RuleAction {
+  name: String!
+  ruleActionID: String!
+}
+
+type RuleActionPreview {
+  name: String!
+  ruleActionID: String!
+}
+
+enum RuleActionType {
+  UpdateUserAttribute
+}
+
+input RuleInput {
+  name: String!
+  ruleActions: [String!]!
+  thresholds: [SingleMetricThresholdInput!]!
+}
+
+type SingleMetricThreshold {
+  metricID: String!
+  metricName: String!
+  operator: String!
+  value: Float!
+}
+
+input SingleMetricThresholdInput {
+  metricID: String!
+  operator: String!
+  value: Float!
+}
+
+scalar Void

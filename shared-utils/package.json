@@ -1,0 +1,26 @@
+{
+  "name": "shared-utils",
+  "version": "1.0.0",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.7.1",
+    "dotenv": "^16.3.1",
+    "prisma": "^5.7.1"
+  },
+  "scripts": {
+    "prisma:migrate": "yarn prisma migrate dev",
+    "prisma:generate": "yarn prisma generate",
+    "prisma:seed": "yarn prisma db seed",
+    "prisma:reset": "yarn prisma db push --force-reset && yarn prisma:seed"
+  },
+  "prisma": {
+    "seed": "yarn ts-node prisma/seed.ts"
+  },
+  "devDependencies": {
+    "@graphql-codegen/cli": "^5.0.0",
+    "@graphql-codegen/typescript": "^4.0.1",
+    "@graphql-codegen/typescript-resolvers": "^4.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}

@@ -1,0 +1,269 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// The customer model represents an organization buying our product
+model Customer {
+  customerID        String              @id @default(uuid())
+  ApiKey            ApiKey[]
+  UserStatus        UserStatus[]
+  User              User[]
+  RuleAction        RuleAction[]
+  webhook           String?
+  Metric            Metric[]
+  Rule              Rule[]
+  GenericRule       GenericRule[]
+  GenericRuleAction GenericRuleAction[]
+}
+
+model ApiKey {
+  key        String
+  keyID      String   @id @default(uuid())
+  customer   Customer @relation(fields: [customerID], references: [customerID])
+  customerID String
+}
+
+enum UserStatusState {
+  INACTIVE
+  ACTIVE
+}
+
+model UserStatus {
+  customer                 Customer           @relation(fields: [customerID], references: [customerID])
+  customerID               String
+  statusID                 String             @id @default(uuid())
+  status                   String
+  // UserStatuses are never deleted because UserStatusUpdate references them
+  state                    UserStatusState
+  priority                 Int
+  User                     User[]
+  RuleAction               RuleAction[]
+  UserStatusUpdate         UserStatusUpdate[]
+  default                  Boolean            @default(false)
+  PreviousUserStatusUpdate UserStatusUpdate[] @relation(name: "previousUserStatus")
+}
+
+// The user model represents a user of the customer (the entity being potentially abusive).
+model User {
+  userID               String                 @id @default(uuid()) // userID is the ID of the user in our system
+  customer             Customer               @relation(fields: [customerID], references: [customerID])
+  customerID           String
+  status               UserStatus             @relation(fields: [statusID], references: [statusID])
+  statusID             String
+  customerUserID       String // customer userID is the ID of the user in the customer's system
+  attributeMap         Json                   @default("{}") // attributeMap is a map of user attributes
+  Event                Event[]
+  UserMetricDatastore  UserMetricDatastore[]
+  UserStatusUpdate     UserStatusUpdate[]
+  UserMetricValue      UserMetricValue[]
+  UserSignatureLinkage UserSignatureLinkage[]
+
+  // each customer user must be uniquely identified when namespaced by customer ID
+  @@unique([customerID, customerUserID])
+}
+
+model Event {
+  eventID   String   @id @default(uuid())
+  user      User     @relation(fields: [userID], references: [userID])
+  userID    String
+  eventType String
+  timestamp DateTime
+  eventData Json
+}
+
+enum MetricType {
+  COUNT
+  UNIQUE_VALUES
+}
+
+model Metric {
+  metricID            String                @id @default(uuid())
+  metricType          MetricType // COUNT or UNIQUE_VALUES
+  metricDefinition    Json
+  metricName          String
+  customer            Customer              @relation(fields: [customerID], references: [customerID])
+  UserMetricDatastore UserMetricDatastore[]
+  customerID          String
+  UserMetricValue     UserMetricValue[]
+}
+
+// User metric data store is used to hold any other information needed to compute a metric. For example, in the case of unique values, we need to store the seen values. For count, no data store is needed.
+model UserMetricDatastore {
+  user     User   @relation(fields: [userID], references: [userID])
+  userID   String
+  metric   Metric @relation(fields: [metricID], references: [metricID])
+  metricID String
+  data     Json
+
+  @@id([userID, metricID])
+}
+
+model UserMetricValue {
+  userMetricValueID String    @id @default(uuid())
+  user              User      @relation(fields: [userID], references: [userID])
+  userID            String
+  metric            Metric    @relation(fields: [metricID], references: [metricID])
+  metricID          String
+  value             Float
+  startTime         DateTime? // can be null in the case of the first window
+  endTime           DateTime? // can be null in the case of the last window
+
+  @@unique([userID, metricID, startTime])
+  @@unique([userID, metricID, endTime])
+  @@index(startTime)
+  @@index(endTime)
+  @@index(value)
+}
+
+model RuleAction {
+  customer              Customer                @relation(fields: [customerID], references: [customerID])
+  customerID            String
+  ruleActionID          String                  @id @default(uuid())
+  webhookData           Json // JSON data to send to webhook, later could be templated/dynamic
+  name                  String
+  // (FK to UserStatus, this is the status that the rule will update the user to, can be NULL for no update)
+  // note when user statuses become inactive, we need to update this field to null
+  userStatus            UserStatus?             @relation(fields: [userStatusID], references: [statusID])
+  userStatusID          String?
+  RuleActionRuleLinkage RuleActionRuleLinkage[]
+}
+
+enum RuleStatus {
+  ACTIVE
+  INACTIVE
+  HIDDEN
+}
+
+model Rule {
+  customer       Customer @relation(fields: [customerID], references: [customerID])
+  customerID     String
+  name           String
+  ruleID         String   @id @default(uuid())
+  ruleDefinition Json
+
+  RuleUserStatusUpdateLinkage  RuleUserStatusUpdateLinkage[]
+  RuleUserStatusTriggerLinkage RuleUserStatusTriggerLinkage[]
+  status                       RuleStatus                     @default(ACTIVE)
+  RuleActionRuleLinkage        RuleActionRuleLinkage[]
+}
+
+// defining which actions are taken by which rules
+model RuleActionRuleLinkage {
+  ruleAction   RuleAction @relation(fields: [ruleActionID], references: [ruleActionID])
+  ruleActionID String
+  rule         Rule       @relation(fields: [ruleID], references: [ruleID])
+  ruleID       String
+
+  @@id([ruleActionID, ruleID])
+}
+
+// defines which user statuses are updated by which rules
+model RuleUserStatusTriggerLinkage {
+  rule                Rule             @relation(fields: [ruleID], references: [ruleID])
+  ruleID              String
+  userStatusTrigger   UserStatusUpdate @relation(fields: [userStatusTriggerID], references: [userStatusUpdateID])
+  userStatusTriggerID String
+
+  @@id([ruleID, userStatusTriggerID])
+}
+
+// audit log to record when user statuses got updated
+model UserStatusUpdate {
+  userStatusUpdateID           String                         @id @default(uuid())
+  user                         User                           @relation(fields: [userID], references: [userID])
+  userID                       String
+  timestamp                    DateTime
+  previousUserStatus           UserStatus                     @relation(fields: [previousUserStatusID], references: [statusID], name: "previousUserStatus")
+  previousUserStatusID         String
+  newUserStatus                UserStatus                     @relation(fields: [statusID], references: [statusID])
+  statusID                     String
+  updatedBy                    String
+  RuleUserStatusUpdateLinkage  RuleUserStatusUpdateLinkage[]
+  RuleUserStatusTriggerLinkage RuleUserStatusTriggerLinkage[]
+}
+
+// This linkage table is used to associate a user status update with which rule triggered it. Many rules can trigger the update.
+model RuleUserStatusUpdateLinkage {
+  rule               Rule             @relation(fields: [ruleID], references: [ruleID])
+  ruleID             String
+  userStatusUpdate   UserStatusUpdate @relation(fields: [userStatusUpdateID], references: [userStatusUpdateID])
+  userStatusUpdateID String
+
+  @@id([ruleID, userStatusUpdateID])
+}
+
+model GenericRule {
+  customer                 Customer                   @relation(fields: [customerID], references: [customerID], onDelete: Cascade)
+  customerID               String
+  ruleID                   String                     @id @default(uuid())
+  ruleDefinition           Json
+  signatureDefinition      Json
+  GenericRuleState         GenericRuleState[]
+  GenericRuleActionEvent   GenericRuleActionEvent[]
+  GenericRuleActionLinkage GenericRuleActionLinkage[]
+}
+
+model GenericRuleActionLinkage {
+  genericRuleAction        GenericRuleAction @relation(fields: [ruleActionID], references: [ruleActionID], onDelete: Cascade)
+  ruleActionID             String
+  genericRule              GenericRule       @relation(fields: [ruleID], references: [ruleID], onDelete: Cascade)
+  ruleID                   String
+  genericRuleActionLinkage String            @id @default(uuid())
+}
+
+model GenericRuleState {
+  ruleStateID        String      @id @default(uuid())
+  rule               GenericRule @relation(fields: [ruleID], references: [ruleID], onDelete: Cascade)
+  ruleID             String
+  functionInstanceID String
+  functionInternalID String
+  state              Json
+
+  @@unique([ruleID, functionInstanceID, functionInternalID])
+}
+
+enum GenericRuleActionType {
+  UpdateUserAttribute
+}
+
+model GenericRuleAction {
+  ruleActionID             String                     @id @default(uuid())
+  ruleActionType           GenericRuleActionType
+  ruleActionData           Json?
+  GenericRuleActionEvent   GenericRuleActionEvent[]
+  GenericRuleActionLinkage GenericRuleActionLinkage[]
+  customer                 Customer                   @relation(fields: [customerID], references: [customerID], onDelete: Cascade)
+  customerID               String
+}
+
+model GenericRuleActionEvent {
+  genericRule              GenericRule       @relation(fields: [ruleID], references: [ruleID], onDelete: Cascade)
+  ruleID                   String
+  genericRuleAction        GenericRuleAction @relation(fields: [ruleActionID], references: [ruleActionID], onDelete: Cascade)
+  ruleActionID             String
+  genericRuleActionEventID String            @id @default(uuid())
+  timestamp                DateTime
+}
+
+model UserSignature {
+  signatureID          String                 @id // no default, must be created
+  UserSignatureLinkage UserSignatureLinkage[]
+}
+
+// maps a user to a signature
+model UserSignatureLinkage {
+  userSignature UserSignature @relation(fields: [signatureID], references: [signatureID])
+  signatureID   String
+  user          User          @relation(fields: [userID], references: [userID])
+  userID        String
+
+  @@id([signatureID, userID])
+}

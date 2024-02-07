@@ -1,0 +1,21 @@
+{
+  "name": "tripwire",
+  "version": "1.0.0",
+  "repository": "git@github.com:6peterlu/tripwire.git",
+  "author": "Peter Lu <plu@skiff.org>",
+  "license": "MIT",
+  "private": true,
+  "workspaces": [
+    "event-recorder",
+    "webserver",
+    "shared-utils",
+    "webclient"
+  ],
+  "scripts": {
+    "start": "concurrently \"yarn workspace webserver dev\" \"yarn workspace webclient start\""
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "packageManager": "yarn@4.1.0"
+}
